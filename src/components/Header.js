@@ -1,8 +1,12 @@
+// src/components/Header.js
+// Live clock + date. No action buttons — those moved to FABGroup.
+
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { C } from '../utils/theme';
 import { t, getCurrentLocale } from '../i18n';
 
-export default function Header({ onAddMember, onAddTask }) {
+export default function Header() {
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -10,26 +14,20 @@ export default function Header({ onAddMember, onAddTask }) {
     return () => clearInterval(timer);
   }, []);
 
-  const dateOptions = { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' };
-  const formattedDate = now.toLocaleDateString(getCurrentLocale(), dateOptions);
-  
-  const formattedTime = now.toLocaleTimeString(getCurrentLocale(), {
-    hour: '2-digit', minute: '2-digit', second: '2-digit'
+  const locale = getCurrentLocale();
+  const formattedDate = now.toLocaleDateString(locale, {
+    weekday: 'long', month: 'long', day: 'numeric',
   });
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerInfo} pointerEvents="none">
-        <Text style={styles.dateText}>{formattedDate}</Text>
-        <Text style={styles.clockText}>{formattedTime}</Text>
-      </View>
-      <View style={styles.buttonRow}>
-        <TouchableOpacity style={[styles.button, styles.btnMember]} onPress={onAddMember}>
-          <Text style={styles.buttonText}>{t('header.addMember')}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.button, styles.btnTask]} onPress={onAddTask}>
-          <Text style={styles.buttonText}>{t('header.addTask')}</Text>
-        </TouchableOpacity>
+      <Text style={styles.date}>{formattedDate.toUpperCase()}</Text>
+      <View style={styles.clockRow}>
+        <Text style={styles.clock}>{hh}:{mm}</Text>
+        <Text style={styles.seconds}>:{ss}</Text>
       </View>
     </View>
   );
@@ -37,62 +35,36 @@ export default function Header({ onAddMember, onAddTask }) {
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 50, // safe area approx
-    paddingBottom: 16,
-    backgroundColor: '#1e293b',
+    paddingHorizontal: 18,
+    paddingTop: 52,
+    paddingBottom: 12,
+    backgroundColor: C.bg1,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: C.bg2,
   },
-  headerInfo: {
-    position: 'absolute',
-    top: 50,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 0,
+  date: {
+    fontFamily: 'SpaceMono-Regular',
+    fontSize: 9,
+    color: C.muted,
+    letterSpacing: 2,
+    marginBottom: 4,
   },
-  dateText: {
-    fontSize: 12,
-    color: '#94a3b8',
-    marginBottom: 2,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  clockText: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#f8fafc',
-    fontVariant: ['tabular-nums'],
-  },
-  buttonRow: {
+  clockRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    zIndex: 1,
+    alignItems: 'flex-end',
   },
-  button: {
-    width: 100,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
-    backgroundColor: '#0ea5e9', // Consistent light blue highlight
+  clock: {
+    fontFamily: 'SpaceMono-Bold',
+    fontSize: 28,
+    color: C.text,
+    letterSpacing: -2,
+    lineHeight: 32,
   },
-  btnMember: {
-    // Optionally a slightly different hue if desired, or same
-    backgroundColor: '#0284c7', 
+  seconds: {
+    fontFamily: 'SpaceMono-Regular',
+    fontSize: 13,
+    color: C.subtle,
+    letterSpacing: -0.5,
+    marginBottom: 2,
   },
-  btnTask: {
-    backgroundColor: '#0ea5e9',
-  },
-  buttonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
-  }
 });

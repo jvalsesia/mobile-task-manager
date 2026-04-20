@@ -1,10 +1,31 @@
+// src/components/TimelineGrid.js
+// Redesigned: avatar column headers, color-coded task cards,
+// left accent bars, red "now" line, delete buttons.
+
 import React, { useContext, useRef, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import {
+  View, Text, StyleSheet, ScrollView,
+  TouchableOpacity, Alert,
+} from 'react-native';
 import { TaskContext } from '../TaskContext';
+import { C, HOUR_HEIGHT, TIME_AXIS_W, COL_MIN_W } from '../utils/theme';
 import { t } from '../i18n';
 
-const PIXELS_PER_MINUTE = 1;
-const HOUR_HEIGHT = 60 * PIXELS_PER_MINUTE;
+const PIXELS_PER_MINUTE = HOUR_HEIGHT / 60;
+
+function Avatar({ name, color, size = 30 }) {
+  const initials = name.trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  return (
+    <View style={{
+      width: size, height: size, borderRadius: size / 2,
+      backgroundColor: color, alignItems: 'center', justifyContent: 'center',
+    }}>
+      <Text style={{ color: '#fff', fontSize: size * 0.36, fontFamily: 'SpaceMono-Bold' }}>
+        {initials}
+      </Text>
+    </View>
+  );
+}
 
 export default function TimelineGrid() {
   const { members, tasks, removeTask, removeMember } = useContext(TaskContext);
@@ -13,148 +34,160 @@ export default function TimelineGrid() {
 
   useEffect(() => {
     if (containerHeight === 0) return;
-
-    const scrollToCurrentTime = () => {
-      const now = new Date();
-      const h = now.getHours();
-      const m = now.getMinutes();
-      const timeInPixels = (h * 60 + m) * PIXELS_PER_MINUTE;
-      
-      let offset = timeInPixels - (containerHeight / 2);
-      const totalHeight = 24 * HOUR_HEIGHT;
-      if (offset < 0) offset = 0;
-      if (offset > totalHeight - containerHeight) offset = totalHeight - containerHeight;
-      
-      scrollViewRef.current?.scrollTo({ y: offset, animated: true });
-    };
-
-    // Initial scroll
-    scrollToCurrentTime();
-
-    // Re-center every minute
-    const interval = setInterval(scrollToCurrentTime, 60000);
+    const now = new Date();
+    const timeInPixels = (now.getHours() * 60 + now.getMinutes()) * PIXELS_PER_MINUTE;
+    let offset = timeInPixels - containerHeight / 2;
+    const totalHeight = 24 * HOUR_HEIGHT;
+    offset = Math.max(0, Math.min(offset, totalHeight - containerHeight));
+    scrollViewRef.current?.scrollTo({ y: offset, animated: true });
+    const interval = setInterval(() => {
+      const n = new Date();
+      const y = (n.getHours() * 60 + n.getMinutes()) * PIXELS_PER_MINUTE;
+      let o = y - containerHeight / 2;
+      o = Math.max(0, Math.min(o, totalHeight - containerHeight));
+      scrollViewRef.current?.scrollTo({ y: o, animated: true });
+    }, 60000);
     return () => clearInterval(interval);
   }, [containerHeight]);
 
-const confirmRemoveTask = (task) => {
-  Alert.alert(
-    t('timeline.removeTaskTitle'),
-    t('timeline.removeTaskDesc', { description: task.description }),
-    [
-      { text: t('timeline.cancel'), style: "cancel" },
-      { text: t('timeline.delete'), style: "destructive", onPress: () => removeTask && removeTask(task.id) }
-    ]
-  );
-};
+  const confirmRemoveTask = (task) => {
+    Alert.alert(
+      t('timeline.removeTaskTitle'),
+      t('timeline.removeTaskDesc', { description: task.description }),
+      [
+        { text: t('timeline.cancel'), style: 'cancel' },
+        { text: t('timeline.delete'), style: 'destructive', onPress: () => removeTask?.(task.id) },
+      ]
+    );
+  };
 
-const confirmRemoveMember = (member) => {
-  Alert.alert(
-    t('timeline.removeMemberTitle'),
-    t('timeline.removeMemberDesc', { name: member.name }),
-    [
-      { text: t('timeline.cancel'), style: "cancel" },
-      { text: t('timeline.delete'), style: "destructive", onPress: () => removeMember && removeMember(member.id) }
-    ]
-  );
-};
+  const confirmRemoveMember = (member) => {
+    Alert.alert(
+      t('timeline.removeMemberTitle'),
+      t('timeline.removeMemberDesc', { name: member.name }),
+      [
+        { text: t('timeline.cancel'), style: 'cancel' },
+        { text: t('timeline.delete'), style: 'destructive', onPress: () => removeMember?.(member.id) },
+      ]
+    );
+  };
 
-const hours = Array.from({ length: 24 }, (_, i) => i); // 0 to 23
+  const hours = Array.from({ length: 24 }, (_, i) => i);
 
-// Format time (e.g., "08:00")
-const formatTimeInfo = (h) => {
-  return h.toString().padStart(2, '0') + ':00';
-};
+  const getTaskTop = (startTime) => {
+    const [h, m] = startTime.split(':').map(Number);
+    return (h * 60 + m) * PIXELS_PER_MINUTE;
+  };
 
-const getTaskTopPosition = (startTimeStr) => {
-  const [h, m] = startTimeStr.split(':').map(Number);
-  return (h * 60 + m) * PIXELS_PER_MINUTE;
-};
+  // Current time in pixels for the "now" line
+  const now = new Date();
+  const nowY = (now.getHours() * 60 + now.getMinutes()) * PIXELS_PER_MINUTE;
 
-return (
-  <View style={styles.container}>
-    <ScrollView horizontal bounces={false} contentContainerStyle={{ flexGrow: 1, minWidth: '100%' }}>
-      <View style={styles.gridWrapper}>
+  return (
+    <View style={styles.container}>
+      <ScrollView horizontal bounces={false} contentContainerStyle={{ flexGrow: 1, minWidth: '100%' }}>
+        <View style={styles.gridWrapper}>
 
-        {/* Header Row for Members */}
-        <View style={styles.headerRow}>
-          <View style={styles.timeHeaderCell} />
-          {members.map(member => (
-            <View key={member.id} style={[styles.memberHeaderCell, { backgroundColor: '#2563eb' }]}>
-              <Text style={[styles.memberName, { color: '#ffffff' }]}>{member.name}</Text>
-              <TouchableOpacity 
-                style={styles.deleteMemberBtn} 
-                onPress={() => confirmRemoveMember(member)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Text style={styles.deleteMemberBtnText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-          {members.length === 0 && (
-            <View style={styles.emptyMembersCell}>
-              <Text style={styles.emptyMembersText}>{t('timeline.noMembers')}</Text>
-            </View>
-          )}
-        </View>
+          {/* ── Member header row ── */}
+          <View style={styles.headerRow}>
+            <View style={styles.timeHeaderCell} />
+            {members.map(member => (
+              <View key={member.id} style={[styles.memberHeaderCell, { borderLeftColor: C.bg2 }]}>
+                <Avatar name={member.name} color={member.color} size={30} />
+                <Text style={[styles.memberName, { color: member.color }]}>{member.name}</Text>
+                <TouchableOpacity
+                  style={styles.deleteMemberBtn}
+                  onPress={() => confirmRemoveMember(member)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text style={styles.deleteMemberBtnText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+            {members.length === 0 && (
+              <View style={styles.emptyMembersCell}>
+                <Text style={styles.emptyMembersText}>{t('timeline.noMembers')}</Text>
+              </View>
+            )}
+          </View>
 
-        {/* Timeline Content */}
-        <ScrollView ref={scrollViewRef} onLayout={(e) => setContainerHeight(e.nativeEvent.layout.height)}>
-          <View style={styles.bodyContainer}>
-            {/* Time axis */}
-            <View style={styles.timeAxis}>
-              {hours.map(h => (
-                <View key={h} style={styles.timeSlot}>
-                  <Text style={styles.timeLabel}>{formatTimeInfo(h)}</Text>
-                </View>
-              ))}
-            </View>
+          {/* ── Scrollable timeline body ── */}
+          <ScrollView
+            ref={scrollViewRef}
+            onLayout={e => setContainerHeight(e.nativeEvent.layout.height)}
+          >
+            <View style={styles.bodyContainer}>
 
-            {/* Columns for members */}
-            <View style={styles.columnsContainer}>
-              {/* Horizontal Guide Lines */}
-              <View style={styles.guideLines} pointerEvents="none">
+              {/* Time axis */}
+              <View style={styles.timeAxis}>
                 {hours.map(h => (
-                  <View key={h} style={styles.guideLine} />
+                  <View key={h} style={styles.timeSlot}>
+                    <Text style={styles.timeLabel}>
+                      {String(h).padStart(2, '0')}:00
+                    </Text>
+                  </View>
                 ))}
               </View>
 
-              {members.map(member => {
-                const memberTasks = tasks.filter(t => t.memberId === member.id);
-                return (
-                  <View key={member.id} style={styles.memberColumn}>
-                    {memberTasks.map(task => (
-                      <View
-                        key={task.id}
-                        style={[
-                          styles.taskBlock,
-                          {
-                            backgroundColor: 'rgba(71, 85, 105, 0.85)',
-                            top: getTaskTopPosition(task.startTime),
-                            height: Math.max(task.durationMins * PIXELS_PER_MINUTE, 40),
-                          }
-                        ]}
-                      >
-                        <View style={styles.taskHeader}>
-                          <Text style={styles.taskTimeText}>{task.startTime}</Text>
-                          <TouchableOpacity 
-                            style={styles.deleteButton} 
-                            onPress={() => confirmRemoveTask(task)}
-                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                          >
-                            <Text style={styles.deleteButtonText}>✕</Text>
-                          </TouchableOpacity>
-                        </View>
-                        <Text style={styles.taskText} numberOfLines={2}>{task.description}</Text>
-                      </View>
-                    ))}
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-        </ScrollView>
+              {/* Member columns */}
+              <View style={styles.columnsContainer}>
+                {/* Guide lines */}
+                <View style={styles.guideLines} pointerEvents="none">
+                  {hours.map(h => <View key={h} style={styles.guideLine} />)}
+                </View>
 
-      </View>
+                {/* Now line */}
+                <View
+                  pointerEvents="none"
+                  style={[styles.nowLine, { top: nowY }]}
+                >
+                  <View style={styles.nowDot} />
+                </View>
+
+                {/* Per-member task columns */}
+                {members.map(member => {
+                  const memberTasks = tasks.filter(tk => tk.memberId === member.id);
+                  return (
+                    <View key={member.id} style={styles.memberColumn}>
+                      {memberTasks.map(task => (
+                        <View
+                          key={task.id}
+                          style={[
+                            styles.taskBlock,
+                            {
+                              top: getTaskTop(task.startTime),
+                              height: Math.max(task.durationMins * PIXELS_PER_MINUTE, 38),
+                              backgroundColor: `${member.color}18`,
+                              borderLeftColor: member.color,
+                            },
+                          ]}
+                        >
+                          <View style={styles.taskHeader}>
+                            <Text style={[styles.taskTimeText, { color: member.color }]}>
+                              {task.startTime}
+                              {task.alarmEnabled && !task.alarmDismissed ? ' 🔔' : ''}
+                            </Text>
+                            <TouchableOpacity
+                              style={styles.deleteButton}
+                              onPress={() => confirmRemoveTask(task)}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                              <Text style={styles.deleteButtonText}>✕</Text>
+                            </TouchableOpacity>
+                          </View>
+                          <Text style={styles.taskText} numberOfLines={2}>
+                            {task.description}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  );
+                })}
+              </View>
+
+            </View>
+          </ScrollView>
+        </View>
       </ScrollView>
     </View>
   );
@@ -163,7 +196,7 @@ return (
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1e293b'
+    backgroundColor: C.bg0,
   },
   gridWrapper: {
     flex: 1,
@@ -172,86 +205,129 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
-    backgroundColor: '#1e293b',
+    borderBottomColor: C.bg2,
+    backgroundColor: C.bg1,
   },
   timeHeaderCell: {
-    width: 60,
+    width: TIME_AXIS_W,
     borderRightWidth: 1,
-    borderRightColor: '#334155',
+    borderRightColor: C.bg2,
   },
   memberHeaderCell: {
     flex: 1,
-    minWidth: 100,
-    paddingVertical: 12,
+    minWidth: COL_MIN_W,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRightWidth: 1,
-    borderRightColor: '#334155',
+    borderLeftWidth: 1,
+    borderLeftColor: C.bg2,
+    gap: 4,
+    position: 'relative',
   },
   memberName: {
+    fontFamily: 'SpaceMono-Bold',
+    fontSize: 10,
+    letterSpacing: 0.3,
+  },
+  deleteMemberBtn: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteMemberBtnText: {
+    color: '#fff',
+    fontSize: 8,
     fontWeight: 'bold',
-    fontSize: 16,
   },
   emptyMembersCell: {
-    width: 250,
+    width: 260,
     paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyMembersText: {
-    color: '#94a3b8',
+    color: C.muted,
     fontStyle: 'italic',
+    fontSize: 12,
   },
   bodyContainer: {
     flexDirection: 'row',
     height: 24 * HOUR_HEIGHT,
   },
   timeAxis: {
-    width: 60,
+    width: TIME_AXIS_W,
     borderRightWidth: 1,
-    borderRightColor: '#334155',
-    backgroundColor: '#1e293b',
+    borderRightColor: C.bg2,
+    backgroundColor: C.bg0,
   },
   timeSlot: {
     height: HOUR_HEIGHT,
     justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingTop: 4,
+    paddingTop: 5,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: `${C.bg2}30`,
   },
   timeLabel: {
-    fontSize: 12,
-    color: '#94a3b8',
+    fontSize: 9,
+    color: C.subtle,
+    fontFamily: 'SpaceMono-Regular',
   },
   columnsContainer: {
     flex: 1,
     flexDirection: 'row',
+    position: 'relative',
   },
   guideLines: {
     ...StyleSheet.absoluteFillObject,
   },
   guideLine: {
     height: HOUR_HEIGHT,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: `${C.bg2}20`,
+  },
+  nowLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 1.5,
+    backgroundColor: C.red,
+    zIndex: 5,
+  },
+  nowDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: C.red,
+    marginTop: -3.25,
+    marginLeft: -1,
   },
   memberColumn: {
     flex: 1,
-    minWidth: 100,
-    borderRightWidth: 1,
-    borderRightColor: '#1e293b',
+    minWidth: COL_MIN_W,
     position: 'relative',
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: `${C.bg2}30`,
   },
   taskBlock: {
     position: 'absolute',
     left: 4,
     right: 4,
-    borderRadius: 6,
-    padding: 6,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    padding: 5,
+    paddingRight: 22,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
     elevation: 2,
   },
   taskHeader: {
@@ -260,44 +336,28 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 2,
   },
-  deleteButton: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  deleteButtonText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  deleteMemberBtn: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  deleteMemberBtnText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
   taskTimeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
-    opacity: 0.9,
+    fontFamily: 'SpaceMono-Bold',
+    fontSize: 9,
+    fontWeight: '700',
   },
   taskText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600'
-  }
+    color: C.text,
+    fontSize: 11,
+    fontWeight: '600',
+    lineHeight: 15,
+  },
+  deleteButton: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButtonText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 8,
+    fontWeight: 'bold',
+  },
 });

@@ -1,37 +1,52 @@
-import React, { useState, useContext } from 'react';
+// App.js — Updated to use new components
+// Replaces header buttons with FABGroup + bottom sheet refs.
+//
+// Setup (one-time):
+//   npm install @gorhom/bottom-sheet @gorhom/portal react-native-gesture-handler react-native-reanimated
+//   Add to babel.config.js plugins: ['react-native-reanimated/plugin']
+
+import 'react-native-gesture-handler';
+import React, { useState, useContext, useRef } from 'react';
 import { StyleSheet, View, StatusBar } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { TaskProvider, TaskContext } from './src/TaskContext';
 import Header from './src/components/Header';
 import TimelineGrid from './src/components/TimelineGrid';
-import AddMemberModal from './src/modals/AddMemberModal';
+import FABGroup from './src/components/FABGroup';
 import AddTaskModal from './src/modals/AddTaskModal';
+import AddMemberModal from './src/modals/AddMemberModal';
 import AlarmPopup from './src/components/AlarmPopup';
+import { C } from './src/utils/theme';
 
 function AppContent() {
-  const { addMember, addTask, activeAlarmTask, dismissAlarm } = useContext(TaskContext);
-  const [memberModalVisible, setMemberModalVisible] = useState(false);
-  const [taskModalVisible, setTaskModalVisible] = useState(false);
+  const { members, addMember, addTask, activeAlarmTask, dismissAlarm } = useContext(TaskContext);
+
+  const taskSheetRef = useRef(null);
+  const memberSheetRef = useRef(null);
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
-      <Header 
-        onAddMember={() => setMemberModalVisible(true)}
-        onAddTask={() => setTaskModalVisible(true)}
-      />
-      
+      <StatusBar barStyle="light-content" backgroundColor={C.bg0} />
+
+      <Header />
+
       <TimelineGrid />
 
-      <AddMemberModal 
-        visible={memberModalVisible} 
-        onClose={() => setMemberModalVisible(false)} 
-        onSave={addMember}
+      <FABGroup
+        onAddTask={() => taskSheetRef.current?.present()}
+        onAddMember={() => memberSheetRef.current?.present()}
       />
 
       <AddTaskModal
-        visible={taskModalVisible}
-        onClose={() => setTaskModalVisible(false)}
+        bottomSheetRef={taskSheetRef}
         onSave={addTask}
+      />
+
+      <AddMemberModal
+        bottomSheetRef={memberSheetRef}
+        onSave={addMember}
+        usedColors={members.map(m => m.color)}
       />
 
       <AlarmPopup
@@ -45,15 +60,19 @@ function AppContent() {
 
 export default function App() {
   return (
-    <TaskProvider>
-      <AppContent />
-    </TaskProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <BottomSheetModalProvider>
+        <TaskProvider>
+          <AppContent />
+        </TaskProvider>
+      </BottomSheetModalProvider>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: C.bg0,
   },
 });

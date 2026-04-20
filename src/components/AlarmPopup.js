@@ -1,61 +1,119 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
-import * as Speech from 'expo-speech';
-import { t, getCurrentLocale } from '../i18n';
+// src/components/AlarmPopup.js
+// Redesigned: pulse ring animation, member avatar, single dismiss CTA.
 
-export default function AlarmPopup({ visible, task, onDismiss }) {
+import React, { useEffect, useRef } from 'react';
+import {
+  View, Text, Modal, TouchableOpacity,
+  StyleSheet, Animated,
+} from 'react-native';
+import { C } from '../utils/theme';
 
-  const taskId = task?.id;
-  const memberName = task?.memberName;
-  const description = task?.description;
+function Avatar({ name, color, size = 26 }) {
+  const initials = name.trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  return (
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color, alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ color: '#fff', fontSize: size * 0.36, fontFamily: 'SpaceMono-Bold' }}>{initials}</Text>
+    </View>
+  );
+}
+
+// Animated pulsing ring
+function PulseRing({ color, delay = 0 }) {
+  const scale = useRef(new Animated.Value(0.8)).current;
+  const opacity = useRef(new Animated.Value(0.6)).current;
 
   useEffect(() => {
-    let loopTimeout;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.parallel([
+          Animated.timing(scale, { toValue: 1.8, duration: 1600, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0, duration: 1600, useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(scale, { toValue: 0.8, duration: 0, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0.6, duration: 0, useNativeDriver: true }),
+        ]),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
 
-    const playSpeech = () => {
-      if (visible && memberName && description) {
-        const message = t('alarmPopup.ttsMessage', { name: memberName, description: description });
+  return (
+    <Animated.View style={[
+      styles.pulseRing,
+      { borderColor: color, transform: [{ scale }], opacity },
+    ]} />
+  );
+}
 
-        Speech.speak(message, {
-          rate: 0.9,
-          pitch: 0.95,
-          language: getCurrentLocale(),
-          onDone: () => {
-            // Ensure exactly 5 seconds between messages
-            loopTimeout = setTimeout(playSpeech, 5000);
-          }
-        });
-      }
-    };
+export default function AlarmPopup({ visible, task, onDismiss }) {
+  const cardScale = useRef(new Animated.Value(0.85)).current;
+  const cardOpacity = useRef(new Animated.Value(0)).current;
 
-    if (visible && description) {
-      Speech.stop();
-      playSpeech();
+  useEffect(() => {
+    if (visible) {
+      Animated.spring(cardScale, {
+        toValue: 1,
+        useNativeDriver: true,
+        speed: 14,
+        bounciness: 8,
+      }).start();
+      Animated.timing(cardOpacity, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
     } else {
-      Speech.stop();
-      if (loopTimeout) clearTimeout(loopTimeout);
+      cardScale.setValue(0.85);
+      cardOpacity.setValue(0);
     }
-
-    return () => {
-      Speech.stop();
-      if (loopTimeout) clearTimeout(loopTimeout);
-    };
-  }, [visible, taskId, memberName, description]);
+  }, [visible]);
 
   if (!task) return null;
+
+  const memberColor = task.memberColor || C.sky;
 
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.overlay}>
-        <View style={styles.container}>
-          <Text style={styles.title}>{t('alarmPopup.title')}</Text>
-          <Text style={styles.description}>{task.description}</Text>
-          <Text style={styles.timeLabel}>{t('alarmPopup.startsAt')} {task.startTime}</Text>
+        <Animated.View style={[
+          styles.card,
+          { transform: [{ scale: cardScale }], opacity: cardOpacity },
+        ]}>
+          {/* Pulse rings */}
+          <View style={styles.iconContainer}>
+            <PulseRing color={C.red} delay={0} />
+            <PulseRing color={C.red} delay={500} />
+            <View style={styles.bellCircle}>
+              <Text style={styles.bellEmoji}>🔔</Text>
+            </View>
+          </View>
 
-          <TouchableOpacity style={styles.btn} onPress={onDismiss}>
-            <Text style={styles.btnText}>{t('alarmPopup.dismiss')}</Text>
+          {/* Label */}
+          <Text style={styles.upcomingLabel}>
+            TASK IN {task.alarmOffsetMins} MIN
+          </Text>
+
+          {/* Task name */}
+          <Text style={styles.taskName}>{task.description}</Text>
+
+          {/* Member + time */}
+          <View style={styles.metaRow}>
+            <Avatar name={task.memberName || '?'} color={memberColor} size={24} />
+            <Text style={[styles.memberName, { color: memberColor }]}>
+              {task.memberName}
+            </Text>
+            <Text style={styles.dot}>·</Text>
+            <Text style={styles.startTime}>{task.startTime}</Text>
+          </View>
+
+          {/* Dismiss */}
+          <TouchableOpacity style={styles.dismissBtn} onPress={onDismiss} activeOpacity={0.8}>
+            <Text style={styles.dismissText}>Dismiss</Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -64,51 +122,101 @@ export default function AlarmPopup({ visible, task, onDismiss }) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  container: {
-    width: '80%',
-    backgroundColor: '#1e293b',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#334155',
-    padding: 24,
+    backgroundColor: 'rgba(0,0,0,0.75)',
     alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
+    justifyContent: 'center',
+    padding: 24,
   },
-  title: {
+  card: {
+    width: '100%',
+    backgroundColor: C.bg1,
+    borderRadius: 22,
+    padding: 28,
+    borderWidth: 1,
+    borderColor: C.bg2,
+    alignItems: 'center',
+    shadowColor: C.red,
+    shadowOpacity: 0.15,
+    shadowRadius: 32,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 12,
+  },
+  iconContainer: {
+    width: 72,
+    height: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
+  },
+  pulseRing: {
+    position: 'absolute',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 1.5,
+  },
+  bellCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: `${C.red}1a`,
+    borderWidth: 2,
+    borderColor: `${C.red}55`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bellEmoji: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#0ea5e9',
-    marginBottom: 12,
   },
-  description: {
-    fontSize: 18,
-    textAlign: 'center',
-    color: '#f8fafc',
+  upcomingLabel: {
+    fontFamily: 'SpaceMono-Regular',
+    fontSize: 9,
+    color: C.red,
+    letterSpacing: 2,
     marginBottom: 8,
   },
-  timeLabel: {
-    fontSize: 14,
-    color: '#94a3b8',
+  taskName: {
+    fontFamily: 'SpaceMono-Bold',
+    fontSize: 19,
+    color: C.text,
+    textAlign: 'center',
+    marginBottom: 14,
+    lineHeight: 26,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
     marginBottom: 24,
   },
-  btn: {
-    backgroundColor: '#0ea5e9',
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-    borderRadius: 8,
-    width: '100%',
-    alignItems: 'center',
+  memberName: {
+    fontFamily: 'SpaceMono-Bold',
+    fontSize: 12,
   },
-  btnText: {
+  dot: {
+    color: C.muted,
+    fontSize: 12,
+  },
+  startTime: {
+    fontFamily: 'SpaceMono-Regular',
+    fontSize: 11,
+    color: C.muted,
+  },
+  dismissBtn: {
+    width: '100%',
+    backgroundColor: C.red,
+    borderRadius: 14,
+    padding: 14,
+    alignItems: 'center',
+    shadowColor: C.red,
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  dismissText: {
+    fontFamily: 'SpaceMono-Bold',
+    fontSize: 13,
     color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
-  }
+  },
 });
